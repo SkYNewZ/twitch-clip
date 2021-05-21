@@ -1,0 +1,113 @@
+// +build production
+
+package main
+
+import (
+	"errors"
+	"io"
+	"log/syslog"
+	"os"
+	"path/filepath"
+	"runtime"
+
+	log "github.com/sirupsen/logrus"
+	logrussyslog "github.com/sirupsen/logrus/hooks/syslog"
+	"gopkg.in/natefinch/lumberjack.v2"
+)
+
+const logFileName = "run.log"
+
+// Will configure log.SetOutput with the default user-specific logs directory, else /var/log/syslog
+// Logs, if as files, will be rotated
+func init() {
+	// get the system user log directory
+	logDir, err := UserLogDir()
+
+	switch err == nil {
+	case true:
+		// We have the the system user log directory, use it
+		output := configureRotateLogger(logDir)
+		log.SetOutput(io.MultiWriter(os.Stdout, output)) // set os.Stdout at first argument will set the logrus non-interactive mode
+		log.Printf("using log file: %s", output.Filename)
+	case false:
+		// Error, use the system log
+		configureSyslogLogger()
+		log.Println("using syslog")
+	}
+}
+
+// configureRotateLogger return a lumberjack.Logger to use as log.SetOutput
+func configureRotateLogger(path string) *lumberjack.Logger {
+	// Make a folder into if not exist
+	appLogDir := filepath.Join(path, AppDisplayName)
+	if _, err := os.Stat(appLogDir); errors.Is(err, os.ErrNotExist) {
+		_ = os.Mkdir(appLogDir, 0755)
+	}
+
+	return &lumberjack.Logger{
+		Filename:   filepath.Join(appLogDir, logFileName),
+		MaxSize:    5, // megabytes
+		MaxBackups: 2,
+		MaxAge:     2, //days
+		LocalTime:  true,
+		Compress:   false, // disabled by default
+	}
+}
+
+func configureSyslogLogger() {
+	hook, err := logrussyslog.NewSyslogHook("", "", syslog.LOG_DEBUG, "")
+	if err == nil {
+		log.AddHook(hook)
+	}
+}
+
+// UserLogDir returns the default root directory to use for user-specific
+// logs file. Users should create their own application-specific subdirectory
+// within this one and use that.
+//
+// On Unix systems, it returns $XDG_CACHE_HOME as specified by
+// https://specifications.freedesktop.org/basedir-spec/basedir-spec-latest.html if
+// non-empty, else $HOME/.logs.
+// On Darwin, it returns $HOME/Library/Logs.
+// On Windows, it returns %LocalAppData%.
+// On Plan 9, it returns $home/lib/logs.
+//
+// If the location cannot be determined (for example, $HOME is not defined),
+// then it will return an error.
+func UserLogDir() (string, error) {
+	var dir string
+
+	switch runtime.GOOS {
+	case "windows":
+		dir = os.Getenv("LocalAppData")
+		if dir == "" {
+			return "", errors.New("%LocalAppData% is not defined")
+		}
+
+	case "darwin", "ios":
+		dir = os.Getenv("HOME")
+		if dir == "" {
+			return "", errors.New("$HOME is not defined")
+		}
+		dir += "/Library/Logs"
+
+	case "plan9":
+		dir = os.Getenv("home")
+		if dir == "" {
+			return "", errors.New("$home is not defined")
+		}
+		dir += "/lib/logs"
+
+	default: // Unix
+		dir = os.Getenv("XDG_STATE_HOME")
+		if dir == "" {
+			dir = os.Getenv("HOME")
+			if dir == "" {
+				return "", errors.New("neither $XDG_STATE_HOME nor $HOME are defined")
+			}
+			dir += "/.logs"
+		}
+	}
+
+	return dir, nil
+}
