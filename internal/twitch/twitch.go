@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync"
 	"time"
 
 	"github.com/peterbourgon/diskv/v3"
@@ -18,8 +19,8 @@ const (
 
 type Client struct {
 	httpClient *http.Client // make each Twitch requests. Requests will be authenticated
-	Me         *User        // current connected user
 	cache      *diskv.Diskv // store avatar
+	me         *User        // current connected user
 
 	// Available public methods on client
 	Streams StreamsI
@@ -31,51 +32,66 @@ type Config struct {
 	ClientSecret string
 }
 
+var (
+	// Singleton
+	once   sync.Once
+	client *Client
+)
+
 // New returns a new Twitch client
 func New(config *Config) (*Client, error) {
-	if config == nil {
-		return nil, fmt.Errorf("missing Twitch config config")
-	}
-
-	if config.ClientID == "" {
-		return nil, fmt.Errorf("missing Twitch client ID. Check https://dev.twitch.tv/console/apps/create")
-	}
-
-	if config.ClientSecret == "" {
-		return nil, fmt.Errorf("missing Twitch client secret. Check https://dev.twitch.tv/console/apps/create")
-	}
-
-	// create the client
-	c := new(Client)
-
-	// create cache
 	var err error
-	c.cache, err = createCacheDir()
-	if err != nil {
-		return nil, fmt.Errorf("unable to create cache directory: %w", err)
-	}
+	once.Do(func() {
+		if config == nil {
+			err = fmt.Errorf("missing Twitch config config")
+			return
+		}
 
-	// Wait for http.Client
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
-	defer cancel()
+		if config.ClientID == "" {
+			err = fmt.Errorf("missing Twitch client ID. Check https://dev.twitch.tv/console/apps/create")
+			return
+		}
 
-	c.httpClient, err = getToken(ctx, config)
-	if err != nil {
-		return nil, err
-	}
+		if config.ClientSecret == "" {
+			err = fmt.Errorf("missing Twitch client secret. Check https://dev.twitch.tv/console/apps/create")
+			return
+		}
 
-	// Get the original transport
-	c.Streams = &streamsClient{c}
-	c.Users = &usersClient{c}
+		// create the client
+		client = new(Client)
 
-	// Search for current user info
-	u, err := c.Users.Get()
-	if err != nil {
-		return nil, fmt.Errorf("unable to initialize Twitch client: %w", err)
-	}
+		// create cache
+		client.cache, err = createCacheDir()
+		if err != nil {
+			err = fmt.Errorf("unable to create cache directory: %w", err)
+			return
+		}
 
-	c.Me = u[0]
-	return c, nil
+		// Wait for http.Client
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second*30)
+		defer cancel()
+
+		client.httpClient, err = getToken(ctx, config)
+		if err != nil {
+			return
+		}
+
+		// Get the original transport
+		client.Streams = &streamsClient{client}
+		client.Users = &usersClient{client}
+
+		// Get current connected user
+		var users []*User
+		users, err = client.Users.Get()
+		if err != nil {
+			err = fmt.Errorf("unable to initialize client: %w", err)
+			return
+		}
+
+		client.me = users[0]
+	})
+
+	return client, err
 }
 
 func createCacheDir() (*diskv.Diskv, error) {

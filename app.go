@@ -15,8 +15,9 @@ import (
 )
 
 var (
-	twitchClient       *twitch.Client
-	streamsRefreshTime = time.Second * 10
+	// These 2 variables will be overwritten at build time using ldflags
+	twitchClientID     string
+	twitchClientSecret string
 )
 
 type menuItem struct {
@@ -106,7 +107,7 @@ func (i *menuItem) handleStreamMenuItemClick(ctx context.Context) {
 
 // setUserIcon pull avatar and set to given menu item
 func (i *menuItem) setUserIcon() {
-	users, err := twitchClient.Users.Get(i.ID)
+	users, err := setupTwitch().Users.Get(i.ID)
 	if err != nil {
 		log.Errorf("unable to refresh Twitch user info for %s: %s", i.ID, err)
 		return
@@ -118,7 +119,7 @@ func (i *menuItem) setUserIcon() {
 	}
 
 	// get user icon
-	img, err := twitchClient.Users.ProfileImageBytes(users[0])
+	img, err := setupTwitch().Users.ProfileImageBytes(users[0])
 	if err != nil {
 		log.Errorln(err)
 		return
@@ -137,16 +138,18 @@ func (i *menuItem) RefreshVisible(activeStreams []*twitch.Stream) {
 	i.SetVisible(itemIsAnActiveStream)
 }
 
-func setupTwitch() {
-	var err error
-	twitchClient, err = twitch.New(&twitch.Config{ClientID: "[REDACTED]", ClientSecret: "[REDACTED]"})
+func setupTwitch() *twitch.Client {
+	twitchClient, err := twitch.New(&twitch.Config{ClientID: twitchClientID, ClientSecret: twitchClientSecret})
 	if err != nil {
 		log.Fatalln(err)
 	}
+
+	return twitchClient
 }
 
 func displayConnectedUser() {
-	title := fmt.Sprintf("Connected as %s", twitchClient.Me.DisplayName)
+	me := setupTwitch().Users.Me()
+	title := fmt.Sprintf("Connected as %s", me.DisplayName)
 	systray.AddMenuItem(title, "Current user").Disable()
 }
 
@@ -165,14 +168,14 @@ func setupStreamsMenuItem(ctx context.Context) {
 
 // refreshActiveStreams send active streams to out
 func refreshActiveStreams(ctx context.Context, out chan<- []*twitch.Stream) {
-	ticker := time.NewTicker(streamsRefreshTime)
+	ticker := time.NewTicker(time.Second * 10)
 	defer ticker.Stop()
 
 	job := func() {
 		log.Debugln("refreshing followed streams infos")
 
 		// This simulates /streams/followed endpoint
-		streams, err := twitchClient.Streams.GetFollowed()
+		streams, err := setupTwitch().Streams.GetFollowed()
 		if err != nil {
 			log.Errorf("unable to list followed streams: %s", err)
 			return
