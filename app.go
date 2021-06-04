@@ -3,12 +3,16 @@ package main
 import (
 	"context"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
-	"github.com/SkYNewZ/twitch-clip/internal/iina"
+	"github.com/SkYNewZ/twitch-clip/internal/icon"
+	"github.com/SkYNewZ/twitch-clip/internal/player"
+	"github.com/SkYNewZ/twitch-clip/internal/streamlink"
 	"github.com/SkYNewZ/twitch-clip/internal/twitch"
 	"github.com/atotto/clipboard"
+	"github.com/emersion/go-autostart"
 	"github.com/getlantern/systray"
 	log "github.com/sirupsen/logrus"
 	"github.com/thoas/go-funk"
@@ -20,84 +24,190 @@ var (
 	twitchClientSecret string
 )
 
-type menuItem struct {
-	MenuItem *systray.MenuItem
-	Visible  bool
-	ID       string
-	m        sync.Mutex
+const (
+	AppName        = "twitchclip"
+	AppDisplayName = "Twitch Clip"
+)
+
+// application contains all required dependencies
+type application struct {
+	Name        string
+	DisplayName string
+
+	// Main cancel function to stop the program
+	Cancel context.CancelFunc
+
+	// Player to use
+	Player player.Player
+
+	// Twitch client
+	Twitch *twitch.Client
+
+	Streamlink streamlink.Client
+
+	// Carry our current displayed items
+	State map[string]*Item
+
+	// Each string in this chan will be send to system clipboard
+	ClipboardListener chan string
 }
 
-// Show item if not already visible
-func (i *menuItem) Show() {
-	i.m.Lock()
-	defer i.m.Unlock()
-	if i.Visible {
+// New creates a new application
+func New() *application {
+	// Get media player
+	p, err := player.DefaultPlayer()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	s, err := streamlink.New()
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// Get Twitch client
+	twitchClient, err := twitch.New(&twitch.Config{ClientID: twitchClientID, ClientSecret: twitchClientSecret})
+	if err != nil {
+		log.Fatalln(err)
+	}
+
+	// Make the app and inject required dependencies
+	return &application{
+		Name:              AppName,
+		DisplayName:       AppDisplayName,
+		Cancel:            nil,
+		Player:            p,
+		Twitch:            twitchClient,
+		State:             make(map[string]*Item),
+		ClipboardListener: make(chan string, 1),
+		Streamlink:        s,
+	}
+}
+
+// Setup must not be called before systray.Run or systray.Register
+// app := New()
+// systray.Run(app.Setup, app.Stop)
+func (a *application) Setup() {
+	// Set icon and application name
+	systray.SetIcon(icon.Data)
+	systray.SetTooltip(a.DisplayName)
+
+	// Manage auto start
+	done := make(chan struct{}, 1)
+	go a.autostart(done)
+	<-done //wait for "autostart" button displayed before continue
+
+	// Display "quit" button and listen for click
+	quit := systray.AddMenuItem("Quit", "Quit the whole app")
+	systray.AddSeparator()
+	go func() {
+		<-quit.ClickedCh
+		systray.Quit()
+	}()
+
+	// Start application
+	a.Start()
+}
+
+// Start show a Item for each online streams
+// This will be refresh at each streamsRefreshTime
+// The passed context is used to cancel theses routines
+func (a *application) Start() {
+	var ctx context.Context
+	ctx, a.Cancel = context.WithCancel(context.Background())
+
+	// We permit only one array at a time
+	var out = make(chan []*twitch.Stream, 1)
+
+	// start routines for refreshing streams
+	go a.RefreshActiveStreams(ctx, out)
+
+	// start routine to display these streams
+	go a.RefreshStreamsMenuItem(ctx, out)
+
+	// Listen for clipboard requests
+	go a.HandleClipboard(ctx)
+}
+
+// Stop application
+func (a *application) Stop() {
+	a.Cancel()
+}
+
+// autostart make current application auto start at boot and handle change on the item
+func (a *application) autostart(done chan<- struct{}) {
+	executable, err := os.Executable()
+	if err != nil {
+		log.Warningf("cannot find current executable file path. Application won't start automatically: %s", err)
 		return
 	}
 
-	i.MenuItem.Show()
-	i.Visible = true
-}
-
-// Hide item if not already hidden
-func (i *menuItem) Hide() {
-	i.m.Lock()
-	defer i.m.Unlock()
-	if !i.Visible {
-		return
+	app := &autostart.App{
+		Name:        a.Name,
+		DisplayName: a.DisplayName,
+		Exec:        []string{executable},
 	}
 
-	i.MenuItem.Hide()
-	i.Visible = false
-}
+	autostartItem := systray.AddMenuItemCheckbox("Start at login", "Start this app at system startup", app.IsEnabled())
+	close(done) // autostartItem is displayed, we have done
 
-// SetVisible set whether current item should be visible
-func (i *menuItem) SetVisible(visible bool) {
-	switch visible {
-	case true:
-		i.Show()
-	case false:
-		i.Hide()
+	for {
+		<-autostartItem.ClickedCh // wait for a click
+		switch app.IsEnabled() {
+		case true:
+			log.Debugln("disable application autostart")
+			if err := app.Disable(); err != nil {
+				log.Errorln(err)
+				continue
+			}
+
+			autostartItem.Uncheck()
+		case false:
+			log.Debugln("enable application autostart")
+			if err := app.Enable(); err != nil {
+				log.Errorln(err)
+				continue
+			}
+
+			autostartItem.Check()
+		}
 	}
 }
 
-// Refresh refresh item info
-func (i *menuItem) Refresh(title, tooltip string) {
-	i.MenuItem.SetTitle(title)
-	i.MenuItem.SetTooltip(tooltip)
+// ClickStartOnStartup manage if this app must start on system startup or not
+func (a *application) ClickStartOnStartup(item *systray.MenuItem, app *autostart.App) {
+	for {
+		<-item.ClickedCh // wait for a click
+		switch app.IsEnabled() {
+		case true:
+			log.Println("disable application autostart")
+			if err := app.Disable(); err != nil {
+				log.Errorln(err)
+				continue
+			}
+
+			item.Uncheck()
+		case false:
+			log.Println("enable application autostart")
+			if err := app.Enable(); err != nil {
+				log.Errorln(err)
+				continue
+			}
+
+			item.Check()
+		}
+	}
 }
 
-func (i *menuItem) Disable() {
-	i.MenuItem.Disable()
-}
-
-func (i *menuItem) handleStreamMenuItemClick(ctx context.Context) {
-	log.Debugf("starting click routine for [%s]", i.ID)
+func (a *application) HandleClipboard(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debugf("received context cancel: handleStreamMenuItemClick [%s]", i.ID)
+			log.Debugln("received context cancel: HandleClipboard")
 			return // returning not to leak the goroutine
-		case <-i.MenuItem.ClickedCh:
-			log.Debugf("[%s] item is clicked", i.ID)
-
-			// Get link
-			u, err := getStreamLink(i.ID)
-			if err != nil {
-				log.Errorln(err)
-				return
-			}
-
-			// Setting in clipboard
-			log.Debugf("setting link to clipboard for [%s]", i.ID)
-			if err := clipboard.WriteAll(u); err != nil {
-				log.Errorln(err)
-				return
-			}
-
-			// open with iina
-			log.Debugf("openning with iina for [%s]", i.ID)
-			if err := iina.Run(u); err != nil {
+		case link := <-a.ClipboardListener:
+			log.Tracef("setting [%s] to clipboard", link)
+			if err := clipboard.WriteAll(link); err != nil {
 				log.Errorln(err)
 				return
 			}
@@ -105,69 +215,32 @@ func (i *menuItem) handleStreamMenuItemClick(ctx context.Context) {
 	}
 }
 
-// setUserIcon pull avatar and set to given menu item
-func (i *menuItem) setUserIcon() {
-	users, err := setupTwitch().Users.Get(i.ID)
-	if err != nil {
-		log.Errorf("unable to refresh Twitch user info for %s: %s", i.ID, err)
-		return
+// Refresh hide or show menu items based on currently active streams
+func (a *application) Refresh(activeStreams []*twitch.Stream) {
+	var wg sync.WaitGroup
+	wg.Add(len(a.State))
+	for _, item := range a.State {
+		go func(i *Item) {
+			defer wg.Done()
+			itemIsAnActiveStream := funk.Contains(activeStreams, func(stream *twitch.Stream) bool {
+				return stream.UserLogin == i.ID
+			})
+
+			i.SetVisible(itemIsAnActiveStream)
+		}(item)
 	}
 
-	if len(users) == 0 {
-		log.Warningf("no image found for %s", i.ID)
-		return
-	}
-
-	// get user icon
-	img, err := setupTwitch().Users.ProfileImageBytes(users[0])
-	if err != nil {
-		log.Errorln(err)
-		return
-	}
-
-	// set icon
-	i.MenuItem.SetIcon(img)
+	wg.Wait()
 }
 
-// RefreshVisible hide or show current menu items based on currentLiveStreams
-func (i *menuItem) RefreshVisible(activeStreams []*twitch.Stream) {
-	itemIsAnActiveStream := funk.Contains(activeStreams, func(stream *twitch.Stream) bool {
-		return stream.UserLogin == i.ID
-	})
-
-	i.SetVisible(itemIsAnActiveStream)
-}
-
-func setupTwitch() *twitch.Client {
-	twitchClient, err := twitch.New(&twitch.Config{ClientID: twitchClientID, ClientSecret: twitchClientSecret})
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	return twitchClient
-}
-
-func displayConnectedUser() {
-	me := setupTwitch().Users.Me()
+func (a *application) DisplayConnectedUser() {
+	me := a.Twitch.Users.Me()
 	title := fmt.Sprintf("Connected as %s", me.DisplayName)
 	systray.AddMenuItem(title, "Current user").Disable()
 }
 
-// setupStreamsMenuItem show a item for each online streams
-// This will be refresh at each streamsRefreshTime
-// The passed context is used to cancel theses routines
-func setupStreamsMenuItem(ctx context.Context) {
-	var out = make(chan []*twitch.Stream)
-
-	// start routines for refreshing streams
-	go refreshActiveStreams(ctx, out)
-
-	// start routine to display these streams
-	go refreshStreamsMenuItem(ctx, out)
-}
-
-// refreshActiveStreams send active streams to out
-func refreshActiveStreams(ctx context.Context, out chan<- []*twitch.Stream) {
+// RefreshActiveStreams send active streams to out
+func (a *application) RefreshActiveStreams(ctx context.Context, out chan<- []*twitch.Stream) {
 	ticker := time.NewTicker(time.Second * 10)
 	defer ticker.Stop()
 
@@ -175,7 +248,7 @@ func refreshActiveStreams(ctx context.Context, out chan<- []*twitch.Stream) {
 		log.Debugln("refreshing followed streams infos")
 
 		// This simulates /streams/followed endpoint
-		streams, err := setupTwitch().Streams.GetFollowed()
+		streams, err := a.Twitch.Streams.GetFollowed()
 		if err != nil {
 			log.Errorf("unable to list followed streams: %s", err)
 			return
@@ -191,7 +264,7 @@ func refreshActiveStreams(ctx context.Context, out chan<- []*twitch.Stream) {
 
 		select {
 		case <-ctx.Done():
-			log.Debugln("received context cancel: refreshActiveStreams")
+			log.Debugln("received context cancel: RefreshActiveStreams")
 			return // returning not to leak the goroutine
 		case <-ticker.C:
 			continue
@@ -199,25 +272,25 @@ func refreshActiveStreams(ctx context.Context, out chan<- []*twitch.Stream) {
 	}
 }
 
-// refreshStreamsMenuItem display a menu item for each stream received in the channel in
-func refreshStreamsMenuItem(ctx context.Context, in <-chan []*twitch.Stream) {
-	// Used to manage menu items
-	var streamsCh = map[string]*menuItem{}
-
-	// not active stream menu item
-	menuNoActiveStreams := &menuItem{
-		MenuItem: systray.AddMenuItem("No active stream", "No active stream"),
-		Visible:  true,
+// RefreshStreamsMenuItem display a menu Item for each stream received in the channel in
+func (a *application) RefreshStreamsMenuItem(ctx context.Context, in <-chan []*twitch.Stream) {
+	// not active stream menu Item
+	menuNoActiveStreams := &Item{
+		Application: nil,
+		Item:        systray.AddMenuItem("No active stream", "No active stream"),
+		Visible:     true,
+		ID:          "",
+		mutex:       sync.Mutex{},
 	}
 	menuNoActiveStreams.Disable()
 
 	// display connected user
-	displayConnectedUser()
+	a.DisplayConnectedUser()
 
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debugln("received context cancel: refreshStreamsMenuItem")
+			log.Debugln("received context cancel: RefreshStreamsMenuItem")
 			return // returning not to leak the goroutine
 		case activeStreams := <-in:
 			log.Debugf("refreshing menu items for %d active followed streams", len(activeStreams))
@@ -228,25 +301,23 @@ func refreshStreamsMenuItem(ctx context.Context, in <-chan []*twitch.Stream) {
 				title := fmt.Sprintf("%s (%s)", s.UserName, s.GameName)
 
 				// stream already in the stream list. Refresh title and tooltip and show it
-				if v, ok := streamsCh[s.UserLogin]; ok {
+				if v, ok := a.State[s.UserLogin]; ok {
 					v.Refresh(title, tooltip)
 					continue
 				}
 
 				// stream not already in the stream list, make it!
-				streamsCh[s.UserLogin] = makeNewMenuItem(ctx, s, title, tooltip)
+				a.State[s.UserLogin] = a.NewItem(ctx, s, title, tooltip)
 			}
 
-			// show/hide menu item
-			for _, item := range streamsCh {
-				go item.RefreshVisible(activeStreams)
-			}
+			// refresh app
+			a.Refresh(activeStreams)
 		}
 	}
 }
 
-// makeNewMenuItem creates a new menu item and its routine click
-func makeNewMenuItem(ctx context.Context, s *twitch.Stream, title, tooltip string) (item *menuItem) {
+// NewItem creates a new menu Item and its routine click
+func (a *application) NewItem(ctx context.Context, s *twitch.Stream, title, tooltip string) *Item {
 	log.WithFields(map[string]interface{}{
 		"login":    s.UserLogin,
 		"user_id":  s.ID,
@@ -254,16 +325,19 @@ func makeNewMenuItem(ctx context.Context, s *twitch.Stream, title, tooltip strin
 		"game":     s.GameName,
 	}).Tracef("new active stream detected [%s]", s.UserLogin)
 
-	item = &menuItem{
-		MenuItem: systray.AddMenuItem(title, tooltip),
-		ID:       s.UserLogin,
-		Visible:  true, // visible by default
+	item := &Item{
+		Item:        systray.AddMenuItem(title, tooltip),
+		Visible:     true, // Visible by default
+		ID:          s.UserLogin,
+		mutex:       sync.Mutex{},
+		Application: a,
 	}
 
 	// Start routine to pull its icon
-	go item.setUserIcon()
+	go item.SetIcon()
 
-	// Start routine click for this item
-	go item.handleStreamMenuItemClick(ctx)
-	return
+	// Start routine click for this Item
+	go item.Click(ctx)
+
+	return item
 }

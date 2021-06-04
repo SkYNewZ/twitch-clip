@@ -20,13 +20,15 @@ const logFileName = "run.log"
 // Will configure log.SetOutput with the default user-specific logs directory, else /var/log/syslog
 // Logs, if as files, will be rotated
 func init() {
+	log.SetLevel(log.TraceLevel) // default to trace level
+
 	// get the system user log directory
 	logDir, err := UserLogDir()
 
 	switch err == nil {
 	case true:
 		// We have the the system user log directory, use it
-		output := configureRotateLogger(logDir)
+		output := configureRotateLogger(logDir, AppDisplayName)
 		log.SetOutput(io.MultiWriter(os.Stdout, output)) // set os.Stdout at first argument will set the logrus non-interactive mode
 		log.Printf("using log file: %s", output.Filename)
 	case false:
@@ -37,9 +39,9 @@ func init() {
 }
 
 // configureRotateLogger return a lumberjack.Logger to use as log.SetOutput
-func configureRotateLogger(path string) *lumberjack.Logger {
+func configureRotateLogger(path string, name string) *lumberjack.Logger {
 	// Make a folder into if not exist
-	appLogDir := filepath.Join(path, AppDisplayName)
+	appLogDir := filepath.Join(path, name)
 	if _, err := os.Stat(appLogDir); errors.Is(err, os.ErrNotExist) {
 		_ = os.Mkdir(appLogDir, 0755)
 	}
@@ -55,8 +57,7 @@ func configureRotateLogger(path string) *lumberjack.Logger {
 }
 
 func configureSyslogLogger() {
-	hook, err := logrussyslog.NewSyslogHook("", "", syslog.LOG_DEBUG, "")
-	if err == nil {
+	if hook, err := logrussyslog.NewSyslogHook("", "", syslog.LOG_DEBUG, ""); err == nil {
 		log.AddHook(hook)
 	}
 }
