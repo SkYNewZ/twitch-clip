@@ -19,10 +19,10 @@ func Test_player_checkRegistry(t *testing.T) {
 		{
 			name: "VLC",
 			fields: fields{
-				name:       VLC.name,
-				registry:   VLC.registry,
-				registry32: VLC.registry32,
-				command:    VLC.command,
+				name:       VLC.(*player).name,
+				registry:   VLC.(*player).registry,
+				registry32: VLC.(*player).registry32,
+				command:    VLC.(*player).command,
 			},
 			want: true,
 		},
