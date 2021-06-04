@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/SkYNewZ/twitch-clip/internal/icon"
-	"github.com/SkYNewZ/twitch-clip/internal/iina"
 
 	"github.com/SkYNewZ/twitch-clip/internal/streamlink"
 	"github.com/emersion/go-autostart"
@@ -29,11 +28,6 @@ func init() {
 	// streamlink in path ?
 	if !streamlink.InPath() {
 		log.Fatalln("streamlink missing in $PATH")
-	}
-
-	// iina in path ?
-	if !iina.InPath() {
-		log.Fatalln("iina missing in $PATH")
 	}
 }
 
@@ -76,8 +70,6 @@ func onReady() {
 		systray.Quit()
 	}()
 	systray.AddSeparator()
-
-	setupTwitch()
 
 	// main context to stop routines
 	var ctx context.Context
