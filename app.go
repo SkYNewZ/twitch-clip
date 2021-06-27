@@ -132,6 +132,7 @@ func (a *application) Start() {
 // Stop application
 func (a *application) Stop() {
 	a.Cancel()
+	close(a.ClipboardListener)
 }
 
 // autostart make current application auto start at boot and handle change on the item
@@ -209,7 +210,7 @@ func (a *application) HandleClipboard(ctx context.Context) {
 			log.Tracef("setting [%s] to clipboard", link)
 			if err := clipboard.WriteAll(link); err != nil {
 				log.Errorln(err)
-				return
+				continue // do not stop this routine in case of error
 			}
 		}
 	}

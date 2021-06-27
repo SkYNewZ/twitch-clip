@@ -75,13 +75,13 @@ func (i *Item) Click(ctx context.Context) {
 
 			// Get link
 			data, err := i.Application.Streamlink.Run(i.ID)
-			u := strings.TrimSpace(string(data))
 			if err != nil {
 				log.Errorln(err)
-				return
+				continue // do not stop this routine in case of error
 			}
 
 			// Setting in clipboard
+			u := strings.TrimSpace(string(data))
 			i.Application.ClipboardListener <- u
 
 			// Open in player and capture command output
@@ -89,7 +89,7 @@ func (i *Item) Click(ctx context.Context) {
 			log.Debugf("openning with iina for [%s]", i.ID)
 			if err := i.Application.Player.Run(u, i.ID, &out); err != nil {
 				log.Errorf("[%s] cannot run command, received output: %s", i.Application.Player.Name(), out.String())
-				return
+				continue // do not stop this routine in case of error
 			}
 		}
 	}
