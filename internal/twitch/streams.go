@@ -119,7 +119,7 @@ func (s *streamsClient) GetFollowed() ([]*Stream, error) {
 
 	// Specify wanted users
 	q := req.URL.Query()
-	q.Set("user_id", s.c.Me.ID)
+	q.Set("user_id", s.c.Users.Me().ID)
 	req.URL.RawQuery = q.Encode()
 
 	resp, err := s.c.httpClient.Do(req)

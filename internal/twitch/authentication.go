@@ -23,8 +23,9 @@ import (
 var _ http.RoundTripper = (*transport)(nil)
 
 const (
-	tokenDir  = "Twitch Clip"
-	tokenFile = "token.dat" // used to store current session token on disk
+	tokenDir   = "Twitch Clip"
+	tokenFile  = "token.dat" // used to store current session token on disk
+	serverAddr = "localhost:7001"
 )
 
 type transport struct {
@@ -117,17 +118,15 @@ func configOAuth2Workflow() {
 		})
 	}
 
-	addr := "localhost:7001"
-	mux := http.NewServeMux()
-	mux.Handle("/", errorHandling(handleOAuth2Callback))
+	http.Handle("/", errorHandling(handleOAuth2Callback))
 	srv = &http.Server{
-		Addr:    addr,
-		Handler: mux,
+		Addr:    serverAddr,
+		Handler: nil, // let use http.DefaultServeMux
 	}
 
 	// start server
 	go func() {
-		log.Debugf("starting web server for oauth2 callblack at %s", addr)
+		log.Debugf("starting web server for oauth2 callblack at %s", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			log.Errorf("fail to stop web server: %s", err)
 		}
@@ -140,7 +139,7 @@ func getToken(ctx context.Context, config *Config) (*http.Client, error) {
 		ClientSecret: config.ClientSecret,
 		Scopes:       []string{"user:read:follows"},
 		Endpoint:     twitch.Endpoint,
-		RedirectURL:  "http://localhost:7001",
+		RedirectURL:  "http://" + serverAddr,
 	}
 
 	// Retrieve token from disk

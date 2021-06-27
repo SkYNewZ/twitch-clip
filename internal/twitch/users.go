@@ -52,6 +52,9 @@ type UsersI interface {
 	// ProfileImageBytes load the given profile from URL
 	// Reduce its size and send it as bytes
 	ProfileImageBytes(user *User) ([]byte, error)
+
+	// Me returns current connected user
+	Me() *User
 }
 
 type usersClient struct {
@@ -197,4 +200,8 @@ func (u *usersClient) retrieveImageFromCache(name string) ([]byte, bool) {
 	}
 
 	return data, true
+}
+
+func (u *usersClient) Me() *User {
+	return u.c.me
 }
