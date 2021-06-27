@@ -98,10 +98,11 @@ var (
 
 // checkIfExist checks if player exist on $PATH or in Windows Registry
 func (p *player) checkIfExist() bool {
-	_, err := exec.LookPath(p.command[0])
+	v, err := exec.LookPath(p.command[0])
 	switch {
 	case err == nil:
-		return true // Found in $PATH
+		p.command[0] = v // replace command with absolute path
+		return true
 	case p.checkRegistry():
 		return true // Found in Windows registry
 	default:
@@ -114,8 +115,8 @@ func (p *player) checkIfExist() bool {
 func DefaultPlayer() (Player, error) {
 	// For each player, check if found in $PATH or Windows registry and use it
 	for _, player := range players {
-		if ok := player.checkIfExist(); ok {
-			log.Debugf("using player [%s]", player.Name())
+		if player.checkIfExist() {
+			log.Tracef("found player [%s] at [%s]", player.Name(), player.command[0])
 			return player, nil
 		}
 	}

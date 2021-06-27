@@ -54,6 +54,9 @@ type application struct {
 
 // New creates a new application
 func New() *application {
+	// Override PATH (https://stackoverflow.com/questions/27451697/not-able-to-execute-go-file-using-os-exec-package)
+	_ = os.Setenv("PATH", "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/usr/local/sbin")
+
 	// Get media player
 	p, err := player.DefaultPlayer()
 	if err != nil {
