@@ -25,9 +25,9 @@
         "info": {
           "0409": {
             "FileDescription": "Twitch-aware application to watch followed live streams in your favorite media player, with a simple click",
-            "InternalName": "twitch-clip",
+            "InternalName": "twitch_clip",
             "LegalCopyright": "Quentin Lemaire",
-            "OriginalFilename": "twitch-clip.exe",
+            "OriginalFilename": "twitch_clip.exe",
             "ProductName": "Twitch Clip"
           }
         }
