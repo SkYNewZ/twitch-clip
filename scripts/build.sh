@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 
-echo "Cleaning"
-rm -rf assets/twitch-clip Twitch\ Clip.app
+set -e
 
-echo "Build Go app"
-mkdir -p assets
-go build -ldflags="-X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}'" -tags production -o assets/twitch-clip .
+echo "Building Go app"
+go build -ldflags="-X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}'" -tags production -o out/twitch-clip .
 
-echo "Package app"
-pwd
-go run scripts/macapp.go -assets ./assets -bin twitch-clip -icon ./internal/icon/logo.png -identifier com.skynewz.twitchclip -name "Twitch Clip"
+echo "Packaging macOS app"
+go run scripts/macapp.go -assets ./out -bin twitch-clip -icon ./assets/icon1080.png -identifier com.skynewz.twitchclip -name "Twitch Clip" &&
+  mv "Twitch Clip.app" out

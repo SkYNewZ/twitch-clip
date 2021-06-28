@@ -24,6 +24,4 @@
 
 # End of https://www.toptal.com/developers/gitignore/api/go
 
-/Twitch Clip.app
-/assets
-
+/*.syso

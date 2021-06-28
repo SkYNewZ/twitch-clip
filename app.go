@@ -1,5 +1,7 @@
 package main
 
+//go:generate go-winres make --in assets/winres.json --product-version ${VERSION}
+
 import (
 	"context"
 	"fmt"
