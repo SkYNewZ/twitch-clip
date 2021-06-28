@@ -10,8 +10,10 @@ import (
 	"image/png"
 	"io"
 	"net/http"
+	"runtime"
 	"time"
 
+	ico "github.com/Kodeworks/golang-image-ico"
 	"github.com/nfnt/resize"
 	log "github.com/sirupsen/logrus"
 )
@@ -158,14 +160,16 @@ func (u *usersClient) ProfileImageBytes(user *User) ([]byte, error) {
 	}
 
 	// resize it
-	m := resize.Resize(32, 32, img, resize.NearestNeighbor)
+	img = resize.Resize(32, 32, img, resize.NearestNeighbor)
 
 	imageBuffer.Reset()
-	switch imageContentType {
-	case "image/png":
-		err = png.Encode(imageBuffer, m)
-	case "image/jpeg":
-		err = jpeg.Encode(imageBuffer, m, nil)
+	switch runtime.GOOS {
+	case "windows":
+		// Windows need .ico image format
+		err = ico.Encode(imageBuffer, img)
+	default:
+		// Default re-encode to png
+		err = png.Encode(imageBuffer, img)
 	}
 
 	if err != nil {

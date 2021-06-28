@@ -3,6 +3,7 @@ module github.com/SkYNewZ/twitch-clip
 go 1.16
 
 require (
+	github.com/Kodeworks/golang-image-ico v0.0.0-20141118225523-73f0f4cfade9
 	github.com/atotto/clipboard v0.1.4
 	github.com/emersion/go-autostart v0.0.0-20210130080809-00ed301c8e9a
 	github.com/getlantern/golog v0.0.0-20201105130739-9586b8bde3a9 // indirect
