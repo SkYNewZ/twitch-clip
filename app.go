@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pkg/browser"
+
 	"github.com/SkYNewZ/twitch-clip/pkg/notifier"
 
 	"github.com/SkYNewZ/twitch-clip/internal/icon"
@@ -109,6 +111,25 @@ func (a *application) Setup() {
 	go a.autostart(done)
 	<-done //wait for "autostart" button displayed before continue
 
+	// This context will manage all application routines cancellation
+	var ctx context.Context
+	ctx, a.Cancel = context.WithCancel(context.Background())
+
+	// Open Twitch website
+	openTwitch := systray.AddMenuItem("Open Twitch", "Open https://www.twitch.tv")
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-openTwitch.ClickedCh:
+				if err := browser.OpenURL("https://www.twitch.tv"); err != nil {
+					log.Errorf("unable to open twitch website: %s", err)
+				}
+			}
+		}
+	}()
+
 	// Display "quit" button and listen for click
 	quit := systray.AddMenuItem("Quit", "Quit the whole app")
 	systray.AddSeparator()
@@ -118,16 +139,13 @@ func (a *application) Setup() {
 	}()
 
 	// Start application
-	a.Start()
+	a.Start(ctx)
 }
 
 // Start show a Item for each online streams
 // This will be refresh at each streamsRefreshTime
 // The passed context is used to cancel theses routines
-func (a *application) Start() {
-	var ctx context.Context
-	ctx, a.Cancel = context.WithCancel(context.Background())
-
+func (a *application) Start(ctx context.Context) {
 	// We permit only one array at a time
 	var out = make(chan []*twitch.Stream, 1)
 
