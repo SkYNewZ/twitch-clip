@@ -1,13 +1,6 @@
 package main
 
-import (
-	"github.com/getlantern/systray"
-	log "github.com/sirupsen/logrus"
-)
-
-func init() {
-	log.SetLevel(log.TraceLevel)
-}
+import "github.com/getlantern/systray"
 
 func main() {
 	app := New()

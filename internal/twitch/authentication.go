@@ -128,7 +128,7 @@ func configOAuth2Workflow() {
 	go func() {
 		log.Debugf("starting web server for oauth2 callblack at %s", srv.Addr)
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Errorf("fail to stop web server: %s", err)
+			log.Errorf("fail to start web server: %s", err)
 		}
 	}()
 }
