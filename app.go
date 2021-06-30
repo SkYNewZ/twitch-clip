@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SkYNewZ/twitch-clip/pkg/notifier"
+
 	"github.com/SkYNewZ/twitch-clip/internal/icon"
 	"github.com/SkYNewZ/twitch-clip/internal/twitch"
 	"github.com/SkYNewZ/twitch-clip/pkg/player"
@@ -47,6 +49,9 @@ type application struct {
 
 	Streamlink streamlink.Client
 
+	Notifier               notifier.Notifier
+	NotificationCallbackCh <-chan string
+
 	// Carry our current displayed items
 	State map[string]*Item
 
@@ -73,16 +78,21 @@ func New() *application {
 		log.Fatalln(err)
 	}
 
+	// Start the notifier service
+	n, notificationCh := notifier.New(AppDisplayName)
+
 	// Make the app and inject required dependencies
 	return &application{
-		Name:              AppName,
-		DisplayName:       AppDisplayName,
-		Cancel:            nil,
-		Player:            p,
-		Twitch:            twitchClient,
-		State:             make(map[string]*Item),
-		ClipboardListener: make(chan string, 1),
-		Streamlink:        s,
+		Name:                   AppName,
+		DisplayName:            AppDisplayName,
+		Cancel:                 nil,
+		Player:                 p,
+		Twitch:                 twitchClient,
+		Streamlink:             s,
+		Notifier:               n,
+		NotificationCallbackCh: notificationCh,
+		State:                  make(map[string]*Item),
+		ClipboardListener:      make(chan string, 1),
 	}
 }
 
@@ -121,6 +131,9 @@ func (a *application) Start() {
 	// We permit only one array at a time
 	var out = make(chan []*twitch.Stream, 1)
 
+	// Listen for notification callback
+	go a.HandleNotificationCallback(ctx)
+
 	// start routines for refreshing streams
 	go a.RefreshActiveStreams(ctx, out)
 
@@ -133,8 +146,11 @@ func (a *application) Start() {
 
 // Stop application
 func (a *application) Stop() {
-	a.Cancel()
-	close(a.ClipboardListener)
+	a.Cancel()                                 // stop each routines
+	close(a.ClipboardListener)                 // stop clipboard listener
+	if err := a.Notifier.Close(); err != nil { // notification service
+		log.Errorf("fail to stop notification service: %s", err)
+	}
 }
 
 // autostart make current application auto start at boot and handle change on the item
@@ -173,31 +189,6 @@ func (a *application) autostart(done chan<- struct{}) {
 			}
 
 			autostartItem.Check()
-		}
-	}
-}
-
-// ClickStartOnStartup manage if this app must start on system startup or not
-func (a *application) ClickStartOnStartup(item *systray.MenuItem, app *autostart.App) {
-	for {
-		<-item.ClickedCh // wait for a click
-		switch app.IsEnabled() {
-		case true:
-			log.Println("disable application autostart")
-			if err := app.Disable(); err != nil {
-				log.Errorln(err)
-				continue
-			}
-
-			item.Uncheck()
-		case false:
-			log.Println("enable application autostart")
-			if err := app.Enable(); err != nil {
-				log.Errorln(err)
-				continue
-			}
-
-			item.Check()
 		}
 	}
 }
@@ -298,19 +289,19 @@ func (a *application) RefreshStreamsMenuItem(ctx context.Context, in <-chan []*t
 		case activeStreams := <-in:
 			log.Debugf("refreshing menu items for %d active followed streams", len(activeStreams))
 			menuNoActiveStreams.SetVisible(len(activeStreams) == 0)
+			if len(activeStreams) == 0 {
+				continue // no active stream, just leave here
+			}
 
 			for _, s := range activeStreams {
-				tooltip := s.Title
-				title := fmt.Sprintf("%s (%s)", s.UserName, s.GameName)
-
 				// stream already in the stream list. Refresh title and tooltip and show it
 				if v, ok := a.State[s.UserLogin]; ok {
-					v.Refresh(title, tooltip)
+					v.Refresh(s)
 					continue
 				}
 
 				// stream not already in the stream list, make it!
-				a.State[s.UserLogin] = a.NewItem(ctx, s, title, tooltip)
+				a.State[s.UserLogin] = a.NewItem(ctx, s)
 			}
 
 			// refresh app
@@ -319,8 +310,8 @@ func (a *application) RefreshStreamsMenuItem(ctx context.Context, in <-chan []*t
 	}
 }
 
-// NewItem creates a new menu Item and its routine click
-func (a *application) NewItem(ctx context.Context, s *twitch.Stream, title, tooltip string) *Item {
+// NewItem creates a new menu Item and its underlying routines
+func (a *application) NewItem(ctx context.Context, s *twitch.Stream) *Item {
 	log.WithFields(map[string]interface{}{
 		"login":    s.UserLogin,
 		"user_id":  s.ID,
@@ -328,12 +319,15 @@ func (a *application) NewItem(ctx context.Context, s *twitch.Stream, title, tool
 		"game":     s.GameName,
 	}).Tracef("new active stream detected [%s]", s.UserLogin)
 
+	title := fmt.Sprintf("%s (%s)", s.UserName, s.GameName)
 	item := &Item{
-		Item:        systray.AddMenuItem(title, tooltip),
+		Application: a,
+		Item:        systray.AddMenuItem(title, s.Title),
 		Visible:     true, // Visible by default
 		ID:          s.UserLogin,
+		Username:    s.UserName,
+		Game:        s.GameName,
 		mutex:       sync.Mutex{},
-		Application: a,
 	}
 
 	// Start routine to pull its icon
@@ -342,5 +336,35 @@ func (a *application) NewItem(ctx context.Context, s *twitch.Stream, title, tool
 	// Start routine click for this Item
 	go item.Click(ctx)
 
+	// New item appear, so notify
+	m := item.Username
+	if m == "" {
+		m = item.ID
+	}
+	if err := a.Notifier.Notify(m, item.Game, item.ID); err != nil {
+		log.Errorf("fail to notify for [%s]: %s", item.ID, err)
+	}
+
 	return item
+}
+
+// HandleNotificationCallback receives notification callback and launch streamlink process
+func (a *application) HandleNotificationCallback(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			log.Debugln("received context cancel: HandleNotificationCallback")
+			return // returning not to leak the goroutine
+		case v := <-a.NotificationCallbackCh:
+			// get menu item matching streamer name
+			item, ok := a.State[v]
+			if !ok {
+				log.Errorf("received notification callback for non-existent stream [%s]", v)
+				continue
+			}
+
+			// simulate a click
+			item.Item.ClickedCh <- struct{}{}
+		}
+	}
 }

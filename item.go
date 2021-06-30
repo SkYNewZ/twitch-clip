@@ -3,8 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"strings"
 	"sync"
+
+	"github.com/SkYNewZ/twitch-clip/internal/twitch"
 
 	"github.com/getlantern/systray"
 	log "github.com/sirupsen/logrus"
@@ -15,7 +18,9 @@ type Item struct {
 	Application *application
 	Item        *systray.MenuItem
 	Visible     bool
-	ID          string
+	ID          string // streamer user ID (e.g. locklear)
+	Username    string // streamer displayed username (e.g. Locklear)
+	Game        string // game name on stream (e.g. Just Chatting)
 	mutex       sync.Mutex
 }
 
@@ -29,6 +34,11 @@ func (i *Item) Show() {
 
 	i.Item.Show()
 	i.Visible = true
+
+	// Item becomes visible, notify it
+	if err := i.Application.Notifier.Notify(i.Username, i.Game, i.ID); err != nil {
+		log.Errorf("fail to notify for [%s]: %s", i.ID, err)
+	}
 }
 
 // Hide Item if not already hidden
@@ -54,9 +64,14 @@ func (i *Item) SetVisible(visible bool) {
 }
 
 // Refresh refresh Item info
-func (i *Item) Refresh(title, tooltip string) {
+func (i *Item) Refresh(s *twitch.Stream) {
+	// Refresh username and game name
+	i.Username = s.UserName
+	i.Game = s.GameName
+
+	title := fmt.Sprintf("%s (%s)", s.UserName, s.GameName)
 	i.Item.SetTitle(title)
-	i.Item.SetTooltip(tooltip)
+	i.Item.SetTooltip(s.Title)
 }
 
 func (i *Item) Disable() {

@@ -24,10 +24,10 @@
         },
         "info": {
           "0409": {
-            "FileDescription": "Twitch-aware application to watch followed live streams in your favorite media player, with a simple click",
+            "FileDescription": "Twitch GUI on system tray",
             "InternalName": "twitch_clip",
             "LegalCopyright": "Quentin Lemaire",
-            "OriginalFilename": "twitch_clip.exe",
+            "OriginalFilename": "twitch_clip_windows_amd64.exe",
             "ProductName": "Twitch Clip"
           }
         }
