@@ -1,17 +1,14 @@
-// +build production,!windows,!nacl,!plan9
+// +build production
 
 package main
 
 import (
 	"errors"
-	"io"
-	"log/syslog"
 	"os"
 	"path/filepath"
 	"runtime"
 
 	log "github.com/sirupsen/logrus"
-	logrussyslog "github.com/sirupsen/logrus/hooks/syslog"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -24,13 +21,14 @@ func init() {
 
 	// get the system user log directory
 	logDir, err := UserLogDir()
+	log.Traceln("UserLogDir:", err)
 
 	switch err == nil {
 	case true:
 		// We have the the system user log directory, use it
 		output := configureRotateLogger(logDir, AppDisplayName)
-		log.SetOutput(io.MultiWriter(os.Stdout, output)) // set os.Stdout at first argument will set the logrus non-interactive mode
 		log.Printf("using log file: %s", output.Filename)
+		log.SetOutput(output)
 	case false:
 		// Error, use the system log
 		configureSyslogLogger()
@@ -53,12 +51,6 @@ func configureRotateLogger(path string, name string) *lumberjack.Logger {
 		MaxAge:     2, //days
 		LocalTime:  true,
 		Compress:   false, // disabled by default
-	}
-}
-
-func configureSyslogLogger() {
-	if hook, err := logrussyslog.NewSyslogHook("", "", syslog.LOG_DEBUG, ""); err == nil {
-		log.AddHook(hook)
 	}
 }
 
