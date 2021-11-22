@@ -1,6 +1,8 @@
 package main
 
 //go:generate go-winres make --in assets/winres.json --product-version ${VERSION}
+//go:generate sh -c "INPUT=assets/icon22.png OUTPUT=internal/icon/icon_unix.go scripts/make_icon.sh"
+//go:generate sh -c "INPUT=assets/icon.ico OUTPUT=internal/icon/icon_windows.go scripts/make_icon.sh"
 
 import (
 	"context"
@@ -33,8 +35,8 @@ const (
 	AppDisplayName = "Twitch Clip"
 )
 
-// application contains all required dependencies
-type application struct {
+// Application contains all required dependencies
+type Application struct {
 	Name        string
 	DisplayName string
 
@@ -59,8 +61,8 @@ type application struct {
 	ClipboardListener chan string
 }
 
-// New creates a new application
-func New() *application {
+// New creates a new Application
+func New() *Application {
 	// Get media player
 	p, err := player.DefaultPlayer()
 	if err != nil {
@@ -82,7 +84,7 @@ func New() *application {
 	n, notificationCh := notifier.New(AppDisplayName)
 
 	// Make the app and inject required dependencies
-	return &application{
+	return &Application{
 		Name:                   AppName,
 		DisplayName:            AppDisplayName,
 		Cancel:                 nil,
@@ -99,8 +101,8 @@ func New() *application {
 // Setup must not be called before systray.Run or systray.Register
 // app := New()
 // systray.Run(app.Setup, app.Stop)
-func (a *application) Setup() {
-	// Set icon and application name
+func (a *Application) Setup() {
+	// Set icon and Application name
 	systray.SetIcon(icon.Data)
 	systray.SetTooltip(a.DisplayName)
 
@@ -109,7 +111,7 @@ func (a *application) Setup() {
 	go a.autostart(done)
 	<-done //wait for "autostart" button displayed before continue
 
-	// This context will manage all application routines cancellation
+	// This context will manage all Application routines cancellation
 	var ctx context.Context
 	ctx, a.Cancel = context.WithCancel(context.Background())
 
@@ -136,14 +138,14 @@ func (a *application) Setup() {
 		systray.Quit()
 	}()
 
-	// Start application
+	// Start Application
 	a.Start(ctx)
 }
 
 // Start show a Item for each online streams
 // This will be refresh at each streamsRefreshTime
 // The passed context is used to cancel theses routines
-func (a *application) Start(ctx context.Context) {
+func (a *Application) Start(ctx context.Context) {
 	// We permit only one array at a time
 	var out = make(chan []*twitch.Stream, 1)
 
@@ -160,8 +162,8 @@ func (a *application) Start(ctx context.Context) {
 	go a.HandleClipboard(ctx)
 }
 
-// Stop application
-func (a *application) Stop() {
+// Stop Application
+func (a *Application) Stop() {
 	a.Cancel()                                 // stop each routines
 	close(a.ClipboardListener)                 // stop clipboard listener
 	if err := a.Notifier.Close(); err != nil { // notification service
@@ -169,8 +171,8 @@ func (a *application) Stop() {
 	}
 }
 
-// autostart make current application auto start at boot and handle change on the item
-func (a *application) autostart(done chan<- struct{}) {
+// autostart make current Application auto start at boot and handle change on the item
+func (a *Application) autostart(done chan<- struct{}) {
 	executable, err := os.Executable()
 	if err != nil {
 		log.Warningf("cannot find current executable file path. Application won't start automatically: %s", err)
@@ -190,7 +192,7 @@ func (a *application) autostart(done chan<- struct{}) {
 		<-autostartItem.ClickedCh // wait for a click
 		switch app.IsEnabled() {
 		case true:
-			log.Debugln("disable application autostart")
+			log.Debugln("disable Application autostart")
 			if err := app.Disable(); err != nil {
 				log.Errorln(err)
 				continue
@@ -198,7 +200,7 @@ func (a *application) autostart(done chan<- struct{}) {
 
 			autostartItem.Uncheck()
 		case false:
-			log.Debugln("enable application autostart")
+			log.Debugln("enable Application autostart")
 			if err := app.Enable(); err != nil {
 				log.Errorln(err)
 				continue
@@ -209,7 +211,7 @@ func (a *application) autostart(done chan<- struct{}) {
 	}
 }
 
-func (a *application) HandleClipboard(ctx context.Context) {
+func (a *Application) HandleClipboard(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
@@ -226,7 +228,7 @@ func (a *application) HandleClipboard(ctx context.Context) {
 }
 
 // Refresh hide or show menu items based on currently active streams
-func (a *application) Refresh(activeStreams []*twitch.Stream) {
+func (a *Application) Refresh(activeStreams []*twitch.Stream) {
 	var wg sync.WaitGroup
 	wg.Add(len(a.State))
 	for _, item := range a.State {
@@ -243,14 +245,14 @@ func (a *application) Refresh(activeStreams []*twitch.Stream) {
 	wg.Wait()
 }
 
-func (a *application) DisplayConnectedUser() {
+func (a *Application) DisplayConnectedUser() {
 	me := a.Twitch.Users.Me()
 	title := fmt.Sprintf("Connected as %s", me.DisplayName)
 	systray.AddMenuItem(title, "Current user").Disable()
 }
 
 // RefreshActiveStreams send active streams to out
-func (a *application) RefreshActiveStreams(ctx context.Context, out chan<- []*twitch.Stream) {
+func (a *Application) RefreshActiveStreams(ctx context.Context, out chan<- []*twitch.Stream) {
 	ticker := time.NewTicker(time.Second * 10)
 	defer ticker.Stop()
 
@@ -283,7 +285,7 @@ func (a *application) RefreshActiveStreams(ctx context.Context, out chan<- []*tw
 }
 
 // RefreshStreamsMenuItem display a menu Item for each stream received in the channel in
-func (a *application) RefreshStreamsMenuItem(ctx context.Context, in <-chan []*twitch.Stream) {
+func (a *Application) RefreshStreamsMenuItem(ctx context.Context, in <-chan []*twitch.Stream) {
 	// not active stream menu Item
 	menuNoActiveStreams := &Item{
 		Application: nil,
@@ -327,7 +329,7 @@ func (a *application) RefreshStreamsMenuItem(ctx context.Context, in <-chan []*t
 }
 
 // NewItem creates a new menu Item and its underlying routines
-func (a *application) NewItem(ctx context.Context, s *twitch.Stream) *Item {
+func (a *Application) NewItem(ctx context.Context, s *twitch.Stream) *Item {
 	log.WithFields(map[string]interface{}{
 		"login":    s.UserLogin,
 		"user_id":  s.ID,
@@ -365,7 +367,7 @@ func (a *application) NewItem(ctx context.Context, s *twitch.Stream) *Item {
 }
 
 // HandleNotificationCallback receives notification callback and launch streamlink process
-func (a *application) HandleNotificationCallback(ctx context.Context) {
+func (a *Application) HandleNotificationCallback(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():

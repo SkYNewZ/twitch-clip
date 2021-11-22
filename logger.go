@@ -1,3 +1,4 @@
+//go:build production
 // +build production
 
 package main
@@ -55,7 +56,7 @@ func configureRotateLogger(path string, name string) *lumberjack.Logger {
 }
 
 // UserLogDir returns the default root directory to use for user-specific
-// logs file. Users should create their own application-specific subdirectory
+// logs file. Users should create their own Application-specific subdirectory
 // within this one and use that.
 //
 // On Unix systems, it returns $XDG_CACHE_HOME as specified by

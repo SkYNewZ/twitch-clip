@@ -1,4 +1,5 @@
-// +build !windows
+//go:build windows
+// +build windows
 
 package player
 
@@ -17,14 +18,14 @@ func Test_player_checkRegistry(t *testing.T) {
 		want   bool
 	}{
 		{
-			name: "Expected",
+			name: "VLC",
 			fields: fields{
-				name:       "Foo",
-				command:    []string{"foo", "bar"},
-				registry:   "foo",
-				registry32: "bar",
+				name:       VLC.(*player).name,
+				registry:   VLC.(*player).registry,
+				registry32: VLC.(*player).registry32,
+				command:    VLC.(*player).command,
 			},
-			want: false,
+			want: true,
 		},
 	}
 	for _, tt := range tests {

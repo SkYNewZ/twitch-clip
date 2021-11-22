@@ -15,7 +15,7 @@ import (
 
 // Item describes a displayed item
 type Item struct {
-	Application *application
+	Application *Application
 	Item        *systray.MenuItem
 	Visible     bool
 	ID          string // streamer user ID (e.g. locklear)

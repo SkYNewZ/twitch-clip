@@ -7,6 +7,7 @@ GOARCH=$(go env GOARCH)
 TEMP=$(mktemp -d)
 
 echo "Building Go app"
+go mod download
 go build -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}'" \
   -tags production \
   -o "${TEMP}/twitch_clip_${GOOS}_${GOARCH}" .
