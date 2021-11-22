@@ -1,0 +1,11 @@
+run:
+  timeout: 1m
+
+  build-tags:
+    - production
+
+linters:
+  enable:
+    - revive
+    - unparam
+    - misspell
