@@ -7,6 +7,7 @@ import (
 	"log/syslog"
 
 	log "github.com/sirupsen/logrus"
+	logrussyslog "github.com/sirupsen/logrus/hooks/syslog"
 )
 
 func configureSyslogLogger() {

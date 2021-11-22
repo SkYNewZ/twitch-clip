@@ -9,17 +9,15 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pkg/browser"
-
-	"github.com/SkYNewZ/twitch-clip/pkg/notifier"
-
 	"github.com/SkYNewZ/twitch-clip/internal/icon"
 	"github.com/SkYNewZ/twitch-clip/internal/twitch"
+	"github.com/SkYNewZ/twitch-clip/pkg/notifier"
 	"github.com/SkYNewZ/twitch-clip/pkg/player"
 	"github.com/SkYNewZ/twitch-clip/pkg/streamlink"
 	"github.com/atotto/clipboard"
 	"github.com/emersion/go-autostart"
 	"github.com/getlantern/systray"
+	"github.com/pkg/browser"
 	log "github.com/sirupsen/logrus"
 	"github.com/thoas/go-funk"
 )

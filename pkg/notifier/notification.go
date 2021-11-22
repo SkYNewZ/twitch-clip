@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/url"
 	"sync"
 
 	"github.com/phayes/freeport"
@@ -12,7 +11,6 @@ import (
 )
 
 const (
-	defaultTitle         = "A stream has just started"
 	defaultSubtitle      = "%s start streaming %s"
 	actionURI            = "/notification" // Use URI not handle notifications callback
 	serverListenAddr     = "localhost"
@@ -103,12 +101,4 @@ func (s *service) handleNotificationClick(_ http.ResponseWriter, r *http.Request
 
 	log.Tracef("notification service: received notification event [%s]", stream)
 	s.out <- stream
-}
-
-func (s *service) makeNotificationURL(streamer string) string {
-	u, _ := url.Parse("http://" + s.srv.Addr + actionURI)
-	q := u.Query()
-	q.Set(streamQueryParameter, streamer)
-	u.RawQuery = q.Encode()
-	return u.String()
 }

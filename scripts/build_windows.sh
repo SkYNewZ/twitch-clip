@@ -15,6 +15,6 @@ export VERSION
 go generate ./...
 
 echo "Building Go app"
-$GO build -ldflags="-X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}' -H=windowsgui" \
+$GO build -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}' -H=windowsgui" \
   -tags production \
   -o "out/twitch_clip_${GOOS}_${GOARCH}.exe" .
