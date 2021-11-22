@@ -1,44 +1,41 @@
 # twitch-clip
-(Work in progress) Twitch-aware application to watch followed live streams in your favorite media player, with a simple click
+Twitch-aware application to watch followed live streams in your favorite media player, with a simple click
 
 ![Imgur](https://i.imgur.com/FDXwa3T.png)
 
 ## Build (from macOS)
 
+You can use https://taskfile.dev to use predefined tasks.
+
 ### For macOS
 
 ```shell
-$ go build .
+$ task build:darwin # will build the Go binary
+$ task package:darwin # package/bundle as macOS app
 ```
 
 ### For Windows
 
 ````shell
 $ brew install mingw-w64 # Compile https://github.com/getlantern/systray
-$ CGO_ENABLED=1 CC=x86_64-w64-mingw32-gcc CXX=x86_64-w64-mingw32-g++ GOOS=windows GOARCH=amd64 go build -ldflags "-H=windowsgui" .
+$ task build:windows
 ````
 
 ### For Unix
 
 Not supported yet. I didn't find the fix for
 ```shell
-$ CGO_ENABLED=1 GOOS=linux go build .
-# github.com/getlantern/systray
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:78:2: undefined: nativeLoop
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:106:2: undefined: registerSystray
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:111:14: undefined: quit
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:136:2: undefined: addSeparator
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:190:2: undefined: hideMenuItem
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:195:2: undefined: showMenuItem
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:220:2: undefined: addOrUpdateMenuItem
+$ task build:linux
+task: [mod] go mod download
+task: Task "generate" is up to date
+task: [build:linux] go build -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}'" -tags production -o "out/twitch_clip_${GOOS}_${GOARCH}.exe" .
+# runtime/cgo
+linux_syscall.c:67:13: error: implicit declaration of function 'setresgid' is invalid in C99 [-Werror,-Wimplicit-function-declaration]
+linux_syscall.c:67:13: note: did you mean 'setregid'?
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/unistd.h:593:6: note: 'setregid' declared here
+linux_syscall.c:73:13: error: implicit declaration of function 'setresuid' is invalid in C99 [-Werror,-Wimplicit-function-declaration]
+linux_syscall.c:73:13: note: did you mean 'setreuid'?
+/Library/Developer/CommandLineTools/SDKs/MacOSX.sdk/usr/include/unistd.h:595:6: note: 'setreuid' declared here
+task: Failed to run task "build:linux": exit status 2
 
-$ GOOS=linux go build .                                                                                      
-# github.com/getlantern/systray
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:78:2: undefined: nativeLoop
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:106:2: undefined: registerSystray
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:111:14: undefined: quit
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:136:2: undefined: addSeparator
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:190:2: undefined: hideMenuItem
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:195:2: undefined: showMenuItem
-../../../../pkg/mod/github.com/getlantern/systray@v1.1.0/systray.go:220:2: undefined: addOrUpdateMenuItem
 ```
