@@ -22,7 +22,7 @@ func init() {
 
 	// get the system user log directory
 	logDir, err := UserLogDir()
-	log.Traceln("UserLogDir:", err)
+	log.Traceln("UserLogDir:", logDir)
 
 	switch err == nil {
 	case true:

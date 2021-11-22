@@ -235,7 +235,7 @@ func (a *Application) Refresh(activeStreams []*twitch.Stream) {
 		go func(i *Item) {
 			defer wg.Done()
 			itemIsAnActiveStream := funk.Contains(activeStreams, func(stream *twitch.Stream) bool {
-				return stream.UserLogin == i.ID
+				return stream.UserLogin == i.UserLogin
 			})
 
 			i.SetVisible(itemIsAnActiveStream)
@@ -291,7 +291,7 @@ func (a *Application) RefreshStreamsMenuItem(ctx context.Context, in <-chan []*t
 		Application: nil,
 		Item:        systray.AddMenuItem("No active stream", "No active stream"),
 		Visible:     true,
-		ID:          "",
+		UserLogin:   "",
 		mutex:       sync.Mutex{},
 	}
 	menuNoActiveStreams.Disable()
@@ -331,18 +331,23 @@ func (a *Application) RefreshStreamsMenuItem(ctx context.Context, in <-chan []*t
 // NewItem creates a new menu Item and its underlying routines
 func (a *Application) NewItem(ctx context.Context, s *twitch.Stream) *Item {
 	log.WithFields(map[string]interface{}{
-		"login":    s.UserLogin,
-		"user_id":  s.ID,
-		"username": s.UserName,
-		"game":     s.GameName,
+		"login":      s.UserLogin,
+		"user_login": s.UserName,
+		"username":   s.UserName,
+		"game":       s.GameName,
 	}).Tracef("new active stream detected [%s]", s.UserLogin)
 
-	title := fmt.Sprintf("%s (%s)", s.UserName, s.GameName)
+	// sometimes the Twitch API does not send the username at first call, use the user UserLogin instead
+	username := s.UserName
+	if username == "" {
+		username = s.UserLogin
+	}
+
 	item := &Item{
 		Application: a,
-		Item:        systray.AddMenuItem(title, s.Title),
+		Item:        systray.AddMenuItem(fmt.Sprintf("%s (%s)", username, s.GameName), s.Title),
 		Visible:     true, // Visible by default
-		ID:          s.UserLogin,
+		UserLogin:   s.UserLogin,
 		Username:    s.UserName,
 		Game:        s.GameName,
 		mutex:       sync.Mutex{},
@@ -355,12 +360,8 @@ func (a *Application) NewItem(ctx context.Context, s *twitch.Stream) *Item {
 	go item.Click(ctx)
 
 	// New item appear, so notify
-	m := item.Username
-	if m == "" {
-		m = item.ID
-	}
-	if err := a.Notifier.Notify(m, item.Game, item.ID); err != nil {
-		log.Errorf("fail to notify for [%s]: %s", item.ID, err)
+	if err := a.Notifier.Notify(username, item.Game, item.UserLogin); err != nil {
+		log.Errorf("fail to notify for [%s]: %s", item.UserLogin, err)
 	}
 
 	return item

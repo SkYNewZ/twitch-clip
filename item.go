@@ -18,7 +18,7 @@ type Item struct {
 	Application *Application
 	Item        *systray.MenuItem
 	Visible     bool
-	ID          string // streamer user ID (e.g. locklear)
+	UserLogin   string // streamer user UserLogin (e.g. locklear)
 	Username    string // streamer displayed username (e.g. Locklear)
 	Game        string // game name on stream (e.g. Just Chatting)
 	mutex       sync.Mutex
@@ -36,8 +36,8 @@ func (i *Item) Show() {
 	i.Visible = true
 
 	// Item becomes visible, notify it
-	if err := i.Application.Notifier.Notify(i.Username, i.Game, i.ID); err != nil {
-		log.Errorf("fail to notify for [%s]: %s", i.ID, err)
+	if err := i.Application.Notifier.Notify(i.Username, i.Game, i.UserLogin); err != nil {
+		log.Errorf("fail to notify for [%s]: %s", i.UserLogin, err)
 	}
 }
 
@@ -63,14 +63,17 @@ func (i *Item) SetVisible(visible bool) {
 	}
 }
 
-// Refresh refresh Item info
+// Refresh username and game name
 func (i *Item) Refresh(s *twitch.Stream) {
-	// Refresh username and game name
-	i.Username = s.UserName
-	i.Game = s.GameName
+	// sometimes the Twitch API does not send the username at first call, use the user UserLogin instead
+	username := s.UserName
+	if username == "" {
+		username = s.UserLogin
+	}
 
-	title := fmt.Sprintf("%s (%s)", s.UserName, s.GameName)
-	i.Item.SetTitle(title)
+	i.Username = username
+	i.Game = s.GameName
+	i.Item.SetTitle(fmt.Sprintf("%s (%s)", i.Username, i.Game))
 	i.Item.SetTooltip(s.Title)
 }
 
@@ -79,17 +82,17 @@ func (i *Item) Disable() {
 }
 
 func (i *Item) Click(ctx context.Context) {
-	log.Debugf("starting click routine for [%s]", i.ID)
+	log.Debugf("starting click routine for [%s]", i.UserLogin)
 	for {
 		select {
 		case <-ctx.Done():
-			log.Debugf("received context cancel: Click [%s]", i.ID)
+			log.Debugf("received context cancel: Click [%s]", i.UserLogin)
 			return // returning not to leak the goroutine
 		case <-i.Item.ClickedCh:
-			log.Debugf("[%s] Item is clicked", i.ID)
+			log.Debugf("[%s] Item is clicked", i.UserLogin)
 
 			// Get link
-			data, err := i.Application.Streamlink.Run(i.ID)
+			data, err := i.Application.Streamlink.Run(i.UserLogin)
 			if err != nil {
 				log.Errorln(err)
 				continue // do not stop this routine in case of error
@@ -101,8 +104,8 @@ func (i *Item) Click(ctx context.Context) {
 
 			// Open in player and capture command output
 			var out bytes.Buffer
-			log.Debugf("openning with iina for [%s]", i.ID)
-			if err := i.Application.Player.Run(u, i.ID, &out); err != nil {
+			log.Debugf("openning with iina for [%s]", i.UserLogin)
+			if err := i.Application.Player.Run(u, i.UserLogin, &out); err != nil {
 				log.Errorf("[%s] cannot run command, received output: %s", i.Application.Player.Name(), out.String())
 				continue // do not stop this routine in case of error
 			}
@@ -112,14 +115,14 @@ func (i *Item) Click(ctx context.Context) {
 
 // SetIcon pull avatar and set to given menu Item
 func (i *Item) SetIcon() {
-	users, err := i.Application.Twitch.Users.Get(i.ID)
+	users, err := i.Application.Twitch.Users.Get(i.UserLogin)
 	if err != nil {
-		log.Errorf("unable to refresh Twitch user info for %s: %s", i.ID, err)
+		log.Errorf("unable to refresh Twitch user info for %s: %s", i.UserLogin, err)
 		return
 	}
 
 	if len(users) == 0 {
-		log.Warningf("no image found for %s", i.ID)
+		log.Warningf("no image found for %s", i.UserLogin)
 		return
 	}
 
