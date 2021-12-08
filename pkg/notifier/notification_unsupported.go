@@ -13,3 +13,6 @@ var ErrUnsupported = errors.New("notification service: unsupported operation sys
 func (s *service) Notify(username, game, id string) error {
 	return ErrUnsupported
 }
+
+// startServer notification callback handler is not supported
+func (s *service) startServer() {}

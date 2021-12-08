@@ -1,12 +1,9 @@
 package notifier
 
 import (
-	"errors"
-	"fmt"
 	"net/http"
 	"sync"
 
-	"github.com/phayes/freeport"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -44,16 +41,7 @@ func New(title string) (Notifier, <-chan string) {
 		srv:   nil,
 	}
 
-	once.Do(func() {
-		port, err := freeport.GetFreePort()
-		if err != nil {
-			log.Errorf("notification service: cannot find free port, notifications click will not works: %s", err)
-			return
-		}
-
-		s.startServer(port)
-	})
-
+	s.startServer()
 	return s, out
 }
 
@@ -71,34 +59,4 @@ func (s *service) Close() error {
 	}
 
 	return nil
-}
-
-func (s *service) startServer(port int) {
-	log.Tracef("notification service: using port %d", port)
-	http.HandleFunc(actionURI, s.handleNotificationClick)
-	s.srv = &http.Server{
-		Addr:    fmt.Sprintf("%s:%d", serverListenAddr, port),
-		Handler: nil, // let use http.DefaultServeMux
-	}
-
-	// start server
-	go func() {
-		log.Debugf("notification service: starting web server for notification click callblack at %s", s.srv.Addr)
-		if err := s.srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Errorf("notification service: fail to start web server: %s", err)
-		}
-	}()
-}
-
-// handleNotificationClick receives notification click events and
-// send the streamer name to the service channel output
-func (s *service) handleNotificationClick(_ http.ResponseWriter, r *http.Request) {
-	stream := r.URL.Query().Get(streamQueryParameter)
-	if stream == "" {
-		log.Warningf("received notification callback without '%s' key", streamQueryParameter)
-		return
-	}
-
-	log.Tracef("notification service: received notification event [%s]", stream)
-	s.out <- stream
 }
