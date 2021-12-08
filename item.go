@@ -136,3 +136,13 @@ func (i *Item) SetIcon() {
 	// set icon
 	i.Item.SetIcon(img)
 }
+
+// ShouldNotify send true if current item is configured to send notifications
+func (i *Item) ShouldNotify() bool {
+	for _, user := range i.Application.config.Notifications {
+		if i.UserLogin == strings.ToLower(user) {
+			return true
+		}
+	}
+	return false
+}

@@ -1,7 +1,10 @@
 package notifier
 
 import (
+	"errors"
 	"fmt"
+	"github.com/phayes/freeport"
+	"net/http"
 	"net/url"
 
 	log "github.com/sirupsen/logrus"
@@ -47,6 +50,7 @@ func (s *service) makeNotificationURL(streamer string) string {
 func (s *service) startServer() {
 	var port int
 	once.Do(func() {
+		var err error
 		port, err = freeport.GetFreePort()
 		if err != nil {
 			log.Errorf("notification service: cannot find free port, notifications click will not works: %s", err)

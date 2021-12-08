@@ -3,12 +3,20 @@ version: '3'
 vars:
   TEMP:
     sh: mktemp -d
+  VERSION:
+    sh: git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null || echo "v0.0.0-$(git rev-parse --short HEAD)"
 
 tasks:
   default:
+    - task: clean
     - task: lint
     - task: tests
     - task: build
+
+  clean:
+    desc: Clean output folder
+    cmds:
+      - rm -rf out/*
 
   build:
     cmds:
@@ -38,15 +46,11 @@ tasks:
       - rsrc_windows_amd64.syso
       - internal/icon/icon_unix.go
       - internal/icon/icon_windows.go
-    vars:
-      VERSION:
-        sh: git describe --tags --exact-match 2>/dev/null || git describe --tags 2>/dev/null || echo "v0.0.0-$(git rev-parse --short HEAD)"
 
   build:darwin:
-    deps: [ mod, generate ]
+    deps: [ generate ]
     cmds:
       - go build -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}'" -tags production -o "{{.TEMP}}/twitch_clip_${GOOS}_${GOARCH}" .
-      - echo "Binary built at {{.TEMP}}/twitch_clip_${GOOS}_${GOARCH}"
     env:
       GOOS: darwin
       GOARCH: amd64
@@ -56,15 +60,15 @@ tasks:
     deps: [ build:darwin ]
     cmds:
       - go run hack/macapp.go -assets "{{.TEMP}}" -bin "twitch_clip_${GOOS}_${GOARCH}" -icon ./assets/icon1080.png -identifier com.skynewz.twitchclip -name "Twitch Clip" -o ./out/
+      - zip -r ./out/twitch_clip_${GOOS}_${GOARCH}_{{ .VERSION }}.zip "./out/Twitch Clip.app" README.md LICENSE && rm -r "./out/Twitch Clip.app"
     env:
       GOOS: darwin
       GOARCH: amd64
 
   build:windows:
-    deps: [ mod, generate ]
+    deps: [ generate ]
     cmds:
-      - go build -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}' -H=windowsgui" -tags production -o "out/twitch_clip_${GOOS}_${GOARCH}.exe" .
-      - echo "Binary built at out/twitch_clip_${GOOS}_${GOARCH}.exe"
+      - go build -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}' -H=windowsgui" -tags production -o "out/twitch_clip_${GOOS}_${GOARCH}_{{ .VERSION }}.exe" .
     env:
       GOOS: windows
       GOARCH: amd64
@@ -73,10 +77,9 @@ tasks:
       CXX: x86_64-w64-mingw32-g++
 
   build:linux:
-    deps: [ mod, generate ]
+    deps: [ generate ]
     cmds:
-      - go build -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}'" -tags production -o "out/twitch_clip_${GOOS}_${GOARCH}.exe" .
-      - echo "Binary built at out/twitch_clip_${GOOS}_${GOARCH}.exe"
+      - go build -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}'" -tags production -o "out/twitch_clip_${GOOS}_${GOARCH}_{{ .VERSION }}.exe" .
     env:
       GOOS: linux
       GOARCH: amd64

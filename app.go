@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"github.com/SkYNewZ/twitch-clip/internal/config"
 	"os"
 	"sync"
 	"time"
@@ -59,6 +60,8 @@ type Application struct {
 
 	// Each string in this chan will be send to system clipboard
 	ClipboardListener chan string
+
+	config *config.Config
 }
 
 // New creates a new Application
@@ -95,6 +98,7 @@ func New() *Application {
 		NotificationCallbackCh: notificationCh,
 		State:                  make(map[string]*Item),
 		ClipboardListener:      make(chan string, 1),
+		config:                 config.Parse(),
 	}
 }
 
@@ -359,9 +363,11 @@ func (a *Application) NewItem(ctx context.Context, s *twitch.Stream) *Item {
 	// Start routine click for this Item
 	go item.Click(ctx)
 
-	// New item appear, so notify
-	if err := a.Notifier.Notify(username, item.Game, item.UserLogin); err != nil {
-		log.Errorf("fail to notify for [%s]: %s", item.UserLogin, err)
+	// New item appear, so notify if configured
+	if item.ShouldNotify() {
+		if err := a.Notifier.Notify(username, item.Game, item.UserLogin); err != nil {
+			log.Errorf("fail to notify for [%s]: %s", item.UserLogin, err)
+		}
 	}
 
 	return item
