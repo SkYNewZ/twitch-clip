@@ -13,5 +13,6 @@ import (
 func configureSyslogLogger() {
 	if hook, err := logrussyslog.NewSyslogHook("", "", syslog.LOG_DEBUG, ""); err == nil {
 		log.AddHook(hook)
+		log.Println("using syslog")
 	}
 }

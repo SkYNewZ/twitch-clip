@@ -5,6 +5,7 @@ package main
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -19,22 +20,23 @@ const logFileName = "run.log"
 // Logs, if as files, will be rotated
 func init() {
 	log.SetLevel(log.TraceLevel) // default to trace level
+	var outputs = []io.Writer{log.StandardLogger().Out}
 
 	// get the system user log directory
 	logDir, err := UserLogDir()
-	log.Traceln("UserLogDir:", logDir)
+	log.Traceln("user log directory:", logDir)
 
 	switch err == nil {
 	case true:
-		// We have the the system user log directory, use it
-		output := configureRotateLogger(logDir, AppDisplayName)
-		log.Printf("using log file: %s", output.Filename)
-		log.SetOutput(output)
+		// We have the system user log directory, use it
+		rotateLogger := configureRotateLogger(logDir, AppDisplayName)
+		outputs = append(outputs, rotateLogger)
 	case false:
 		// Error, use the system log
 		configureSyslogLogger()
-		log.Println("using syslog")
 	}
+
+	log.SetOutput(io.MultiWriter(outputs...))
 }
 
 // configureRotateLogger return a lumberjack.Logger to use as log.SetOutput
@@ -45,8 +47,10 @@ func configureRotateLogger(path string, name string) *lumberjack.Logger {
 		_ = os.Mkdir(appLogDir, 0755)
 	}
 
+	file := filepath.Join(appLogDir, logFileName)
+	log.Printf("using log file: %s", file)
 	return &lumberjack.Logger{
-		Filename:   filepath.Join(appLogDir, logFileName),
+		Filename:   file,
 		MaxSize:    5, // megabytes
 		MaxBackups: 2,
 		MaxAge:     2, //days
