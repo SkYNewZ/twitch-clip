@@ -19,23 +19,23 @@ tasks:
       - rm -rf out/*
 
   build:
+    desc: Build binary
     cmds:
       - go mod tidy
       - go build ./...
 
   lint:
+    desc: Lint
     cmds:
       - golangci-lint run ./...
 
   tests:
+    desc: Go tests
     cmds:
       - go test -v ./...
 
-  mod:
-    cmds:
-      - go mod download
-
   generate:
+    desc: Generate assets
     cmds:
       - go generate ./...
     sources:
@@ -48,15 +48,17 @@ tasks:
       - internal/icon/icon_windows.go
 
   build:darwin:
+    desc: Build for darwin/amd64
     deps: [ generate ]
     cmds:
-      - go build -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}'" -tags production -o "{{.TEMP}}/twitch_clip_${GOOS}_${GOARCH}" .
+      - go build -a -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}'" -tags production -o "{{.TEMP}}/twitch_clip_${GOOS}_${GOARCH}" .
     env:
       GOOS: darwin
       GOARCH: amd64
       CGO_ENABLED: "1"
 
   package:darwin:
+    desc: Package binary as macOS app
     deps: [ build:darwin ]
     cmds:
       - go run hack/macapp.go -assets "{{.TEMP}}" -bin "twitch_clip_${GOOS}_${GOARCH}" -icon ./assets/icon1080.png -identifier com.skynewz.twitchclip -name "Twitch Clip" -o ./out/
@@ -66,9 +68,10 @@ tasks:
       GOARCH: amd64
 
   build:windows:
+    desc: Build windows/amd64
     deps: [ generate ]
     cmds:
-      - go build -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}' -H=windowsgui" -tags production -o "out/twitch_clip_${GOOS}_${GOARCH}_{{ .VERSION }}.exe" .
+      - go build -a -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}' -H=windowsgui" -tags production -o "out/twitch_clip_${GOOS}_${GOARCH}_{{ .VERSION }}.exe" .
     env:
       GOOS: windows
       GOARCH: amd64
@@ -77,11 +80,18 @@ tasks:
       CXX: x86_64-w64-mingw32-g++
 
   build:linux:
+    desc: Build linux/amd64
     deps: [ generate ]
     cmds:
-      - go build -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}'" -tags production -o "out/twitch_clip_${GOOS}_${GOARCH}_{{ .VERSION }}.exe" .
+      - go build -a -ldflags="-s -w -X 'main.twitchClientID=${TWITCH_CLIENT_ID}' -X 'main.twitchClientSecret=${TWITCH_SECRET_ID}'" -tags production -o "out/twitch_clip_${GOOS}_${GOARCH}_{{ .VERSION }}.exe" .
     env:
       GOOS: linux
       GOARCH: amd64
       CGO_ENABLED: "1"
       CC: gcc
+
+  changelog:
+    desc: Update CHANGELOG.md
+    cmds:
+      - git-chglog > CHANGELOG.md
+
