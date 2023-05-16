@@ -169,7 +169,7 @@ func (a *Application) Start(ctx context.Context) {
 
 // Stop Application
 func (a *Application) Stop() {
-	a.Cancel()                                 // stop each routines
+	a.Cancel()                                 // stop each routine
 	close(a.ClipboardListener)                 // stop clipboard listener
 	if err := a.Notifier.Close(); err != nil { // notification service
 		log.Errorf("fail to stop notification service: %s", err)
@@ -234,20 +234,13 @@ func (a *Application) HandleClipboard(ctx context.Context) {
 
 // Refresh hide or show menu items based on currently active streams
 func (a *Application) Refresh(activeStreams []*twitch.Stream) {
-	var wg sync.WaitGroup
-	wg.Add(len(a.State))
 	for _, item := range a.State {
-		go func(i *Item) {
-			defer wg.Done()
-			itemIsAnActiveStream := funk.Contains(activeStreams, func(stream *twitch.Stream) bool {
-				return stream.UserLogin == i.UserLogin
-			})
+		itemIsAnActiveStream := funk.Contains(activeStreams, func(stream *twitch.Stream) bool {
+			return stream.UserLogin == item.UserLogin
+		})
 
-			i.SetVisible(itemIsAnActiveStream)
-		}(item)
+		item.SetVisible(itemIsAnActiveStream)
 	}
-
-	wg.Wait()
 }
 
 func (a *Application) DisplayConnectedUser() {
@@ -312,9 +305,6 @@ func (a *Application) RefreshStreamsMenuItem(ctx context.Context, in <-chan []*t
 		case activeStreams := <-in:
 			log.Debugf("refreshing menu items for %d active followed streams", len(activeStreams))
 			menuNoActiveStreams.SetVisible(len(activeStreams) == 0)
-			if len(activeStreams) == 0 {
-				continue // no active stream, just leave here
-			}
 
 			for _, s := range activeStreams {
 				// stream already in the stream list. Refresh title and tooltip and show it

@@ -1,8 +1,22 @@
 
+<a name="v0.0.3"></a>
+## [v0.0.3](https://github.com/SkYNewZ/twitch-clip/compare/v0.0.2...v0.0.3)
+
+> 2023-05-16
+
+### Chore
+
+* Upgrade Go modules
+
+### Fix
+
+* Try to fix a bug which close app when 0 stream online
+
+
 <a name="v0.0.2"></a>
 ## v0.0.2
 
-> 2021-12-13
+> 2022-11-15
 
 ### Feat
 
