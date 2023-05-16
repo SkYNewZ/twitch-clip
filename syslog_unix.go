@@ -1,5 +1,4 @@
 //go:build production && !windows && !nacl && !plan9
-// +build production,!windows,!nacl,!plan9
 
 package main
 

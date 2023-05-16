@@ -27,7 +27,7 @@ tasks:
   lint:
     desc: Lint
     cmds:
-      - golangci-lint run ./...
+      - go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.52.2 run ./...
 
   tests:
     desc: Go tests

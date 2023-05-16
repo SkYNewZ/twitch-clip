@@ -3,13 +3,17 @@ package notifier
 import (
 	"errors"
 	"fmt"
-	"github.com/phayes/freeport"
 	"net/http"
 	"net/url"
+	"sync"
+
+	"github.com/phayes/freeport"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/stuartleeks/toast"
 )
+
+var once sync.Once
 
 func (s *service) Notify(username, game, id string) error {
 	log.Tracef("notification service: creating notification for [%s]", username)

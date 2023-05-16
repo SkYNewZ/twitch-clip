@@ -1,16 +1,17 @@
 package main
 
-//go:generate go-winres make --in assets/winres.json --product-version ${VERSION}
+//go:generate go run github.com/tc-hib/go-winres@latest make --in assets/winres.json --product-version ${VERSION}
 //go:generate sh -c "INPUT=assets/icon22.png OUTPUT=internal/icon/icon_unix.go hack/make_icon_unix.sh"
 //go:generate sh -c "INPUT=assets/icon.ico OUTPUT=internal/icon/icon_windows.go hack/make_icon_windows.sh"
 
 import (
 	"context"
 	"fmt"
-	"github.com/SkYNewZ/twitch-clip/internal/config"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/SkYNewZ/twitch-clip/internal/config"
 
 	"github.com/SkYNewZ/twitch-clip/internal/icon"
 	"github.com/SkYNewZ/twitch-clip/internal/twitch"

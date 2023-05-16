@@ -2,7 +2,6 @@ package notifier
 
 import (
 	"net/http"
-	"sync"
 
 	log "github.com/sirupsen/logrus"
 )
@@ -13,8 +12,6 @@ const (
 	serverListenAddr     = "localhost"
 	streamQueryParameter = "id"
 )
-
-var once sync.Once
 
 // Notifier service
 type Notifier interface {
@@ -54,9 +51,5 @@ func (s *service) Close() error {
 	}
 
 	log.Debugln("notification service: closing web server")
-	if err := s.srv.Close(); err != nil {
-		return err
-	}
-
-	return nil
+	return s.srv.Close()
 }
